@@ -1,20 +1,29 @@
 # Tetris 
 Проект представляет собой терминальную реализацию игры тетрис
+
 Разработан на языке C с использованием библиотеки ncurses
 
 ## Установка
 
-- Для полноценной работы игры необходимо установить инструменты:
-`sudo apt install libncursesw5-dev gcc git` (Ubuntu/Debian)
+- Для полноценной работы игры необходимо установить инструменты (Ubuntu/Debian)
+```bash
+sudo apt install libncursesw5-dev gcc git
+``` 
 
 - После установки необходимых инструментов нужно склонировать этот репозиторий:
-`git clone git@github.com:exodess/Tetris.git`
+```bash
+git clone git@github.com:exodess/Tetris.git
+```
 
 - Устанавливаем игру
-`cd Tetris && make install`
+```bash
+cd Tetris && make install
+```
 
 - Запускаем игру
-`make start`
+```bash
+make start
+```
 
 
 ## Управление
