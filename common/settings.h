@@ -31,8 +31,8 @@ typedef struct {
 	WINDOW * wgfield;
 	WINDOW * wsidebar;
 	WINDOW * wnextshape;
+	
 	field_t gfield;
-
 	
 } display_t;
 
@@ -43,6 +43,7 @@ typedef struct {
 
 	shape_t * current_shape;
 	shape_t * next_shape;
+	
 } ginfo_t;
 
 /* информация о кнопках управления */
@@ -60,14 +61,14 @@ typedef struct {
 #define COUNT_SHAPES 7
 
 /* для механики подсчета очков и уровней (доп 2,3) */
-#define GET_POINTS_FOR_DESTROY_LINE(i) count_points[(i) % 5]
+#define GET_POINTS_FOR_DESTROY_LINE(i) count_points[(i)]
 
 #define COUNT_LEVELS 10
-#define REQUIRED_COUNT_SCORES
+/* #define REQUIRED_COUNT_SCORES */
 #define SAVE_FILE "bin/.save"
 
-#define INITIAL_DELAY 110
-#define GET_HALFDELAY(level) (INITIAL_DELAY - (level*10)) 
+#define INITIAL_DELAY 200000
+#define GET_HALFDELAY(level) (INITIAL_DELAY - ((level)*15000))
 #define COUNT_POINTS_TO_LEVEL_UP 600
 
 #endif

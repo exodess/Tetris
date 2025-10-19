@@ -1,24 +1,24 @@
 #include <stdio.h>
-#include <time.h>
+#include <time.h> 
 #include <stdlib.h>
+#include <pthread.h>
+#define _BSD_SOURCE /* для usleep */
+#include <unistd.h>
 #include "tetris.h"
 #include "../../gui/cli/drowing.h"
-/* #include "../../common/settings.h" */
-
-
 
 int main(void)
 {
 	/* главная функция программы */
 
 	/* инициализируем структуру экрана игрового поля */
-
+	int is_exit = 0;
 	display_t display_info;
 	ginfo_t game_info;
 
 	init_game_field(&display_info);
 
-	while(1) {
+	while(!is_exit) {
 		/* реализуем конечный автомат */
 		/* храним игровую информацию об очках и уровне */
 
@@ -32,8 +32,9 @@ int main(void)
 			processing_user_input(&display_info, &game_info);
 
 			is_end = interaction(&display_info, &game_info);
-							
 		}
+
+		is_exit = end_game(&display_info, &game_info);
 		
 	}
 
@@ -45,10 +46,11 @@ int main(void)
 void spawn_shape(shape_t * this)
 {
 	/* Генерируем случайную фигуру и создаем ее */
-	srand(time(0));
-	int new_type = rand() % COUNT_SHAPES;
-	if(this) printf("%d", new_type);
-	create_shape(this, new_type); 
+
+	srand(time(0)); 
+	int new_type = rand() % COUNT_SHAPES; 
+	
+	create_shape(this, new_type);
 
 }
 
@@ -58,7 +60,7 @@ void spawn(display_t * display_info, ginfo_t * game_info)
 		для next_shape создается новая фигура и сохраняется в памяти */
 
 	display_info->y = 0;
-	display_info->x = SCREEN_WIDTH / 2;
+	display_info->x = SCREEN_WIDTH / 2 - 1;
 
 	shape_t *cur = game_info->current_shape, *next = game_info->next_shape;
 
@@ -75,39 +77,70 @@ void spawn(display_t * display_info, ginfo_t * game_info)
 	
 }
 
+void * pdelay(void * arg)
+{
+	/* реализуем задержку в виде отдельного потока */
+
+	unsigned int time_delay = *(unsigned int*)arg;
+
+	usleep(time_delay); 
+
+	return NULL;
+}
+
 void processing_user_input(display_t * display_info, ginfo_t * game_info) 
 { 
 	chtype ch; 
 	int is_down = 0;
-	display(display_info, game_info);
+	pthread_t ptdelay;
+
+	unsigned int time_delay = GET_HALFDELAY(game_info->level); 
+
+	while(!is_down) { 
+		/* засекаем время, которое фигура не будет падать вниз (задержка) */
+
+		/* создаем отдельный поток для задержки вывода */
+		pthread_create(&ptdelay, NULL, pdelay, &time_delay);
 	
-	while(!is_down && (ch = getch()) != (unsigned)ERR) { 
-		
-	
-		if(ch == KEY_PAUSE) pause(display_info); 
-
-		else if(ch == KEY_TO_LEFT) 
-			display_info->x -= move_to_left(display_info, game_info);
-			
-		else if(ch == KEY_TO_RIGHT)
-			display_info->x += move_to_right(display_info, game_info);
-			
-		else if(ch == KEY_TO_DOWN)
-			/* фигура падает вниз */
-			while(move_to_down(display_info, game_info)) display_info->y ++;
-			
-		else if(ch == KEY_ROTATE)
-			rotate_shape(display_info, game_info);
-			
-		else if(ch == 'h')
-			printf("Показ следующей фигуры");
-
-		if(!move_to_down(display_info, game_info)) is_down = 1;
-		if(!is_down) display_info->y++;
-
 		display(display_info, game_info);
 		
+		while(!pthread_join(ptdelay, NULL)) {
+
+			ch = getch();
+			if(ch == KEY_PAUSE || ch == KEY_TO_LEFT || ch == KEY_TO_RIGHT || \
+			   ch == KEY_TO_DOWN || ch == KEY_ROTATE || ch == KEY_SHOW_NEXT_FIGURE) {
+			   	
+				if(ch == KEY_PAUSE) game_pause(display_info);
+								
+				else if(ch == KEY_TO_LEFT) 
+					display_info->x -= move_to_left(display_info, game_info);
+					
+				else if(ch == KEY_TO_RIGHT)
+					display_info->x += move_to_right(display_info, game_info);
+					
+				else if(ch == KEY_TO_DOWN)
+					/* фигура падает вниз */
+					while(move_to_down(display_info, game_info)) display_info->y ++;
+					
+				else if(ch == KEY_ROTATE)
+					rotate_shape(display_info, game_info);
+					
+				else if(ch == KEY_SHOW_NEXT_FIGURE)
+					switch_next_shape_window(display_info);	
+
+				display(display_info, game_info);
+
+			}
+
+			while(getch() != ERR) ; 
+
+		}
+		
+		if(!move_to_down(display_info, game_info)) is_down = 1;
+		if(!is_down) display_info->y++;
+		
 	} 
+
 } 
 
 int interaction(display_t * display_info, ginfo_t * game_info) 
@@ -123,7 +156,7 @@ int interaction(display_t * display_info, ginfo_t * game_info)
 	/* присваиваем упавшую фигуру игровому полю */
 	for(int i = 0; i < game_info->current_shape->height; i++)
 		for(int j = 0; j < game_info->current_shape->width; j++)
-			display_info->gfield[y + i][x + j] = game_info->current_shape->figure[i][j];
+			display_info->gfield[y + i][x + j] |= game_info->current_shape->figure[i][j];
 
 	/* проверяем, есть ли полностью заполненные линии */
 	int count_full_lines = 0;
@@ -134,32 +167,56 @@ int interaction(display_t * display_info, ginfo_t * game_info)
 		for(int j = 0; j < SCREEN_WIDTH; j++)
 			if(!GET_VALUE(display_info->gfield[i][j])) is_full = 0;
 
-		count_full_lines += is_full;
+		if(is_full) {
+			count_full_lines++;
+			remove_full_line(display_info, i);
+			i++;
+		}
 	}
-
+	/* обновляем значение счетчика очков */
 	game_info->current_score += GET_POINTS_FOR_DESTROY_LINE(count_full_lines);
 
+	/* обновляем рекорд в игре */
 	if(game_info->current_score > get_game_record()) {
 		game_info->record = game_info->current_score;
 		set_game_record(game_info->record);
 	}
-	
-	if(game_info->current_score > COUNT_POINTS_TO_LEVEL_UP && game_info->level < COUNT_LEVELS)
-		game_info->level++; 
 
+	/* обновляем уровень, если набралось нужное количество очков */
+	game_info->level = game_info->current_score / COUNT_POINTS_TO_LEVEL_UP;
+		
+	display(display_info, game_info);
 
 	return (y == 0);
 }
 
-void pause(display_t * display_info)
+void remove_full_line(display_t * display_info, int y)
+{
+	/* функция служит для удаления заполненной строки из игрового поля
+		Удаление происходит путем сдвига верхних строк на одну позицию вниз
+	 */
+
+	 
+	for(int i = y; i > 0; i--)
+		for(int j = 0; j < SCREEN_WIDTH; j++)
+			display_info->gfield[i][j] = display_info->gfield[i - 1][j];
+
+	/* самая верхняя линия становится пустой */
+	for(int j = 0; j < SCREEN_WIDTH; j++)
+		display_info->gfield[0][j] = '0';
+	
+}
+
+void game_pause(display_t * display_info)
 {
 	chtype ch; 
-	drowing_pause_place(display_info);
+ 	/* выводим слово PAUSE */
+	drowing_pause_place(display_info, 0);
 	
-	nocbreak(); 
-	while((char)(ch = getch()) != KEY_START_GAME) ; 
+	while((ch = getch()) != KEY_START_GAME) ; 
 
-	halfdelay(INITIAL_DELAY); 
+	/* очищаем слово PAUSE */
+	drowing_pause_place(display_info, 1);
 }
 
 
@@ -171,8 +228,7 @@ void start_game(ginfo_t * game_info)
 
 		Параллельно устанавливаем игровые показатели и время обновления экрана
 	*/
-
-	nocbreak();
+	
 	game_info->level = 0;
 	game_info->record = get_game_record();
 	game_info->current_score = 0;
@@ -183,8 +239,22 @@ void start_game(ginfo_t * game_info)
 	spawn_shape(game_info->next_shape); 
 
 	drowing_start_place();
-	halfdelay(INITIAL_DELAY);
-	
+		
+}
+
+int end_game(display_t * display_info, ginfo_t * game_info)
+{
+	free(game_info->next_shape);
+	free(game_info->current_shape);
+	game_info->next_shape = NULL;
+	game_info->current_shape = NULL;
+
+	/* очищаем игровое поле */
+	for(int i = 0; i < SCREEN_HEIGHT; i++)
+		for(int j = 0; j < SCREEN_WIDTH; j++)
+			display_info->gfield[i][j] = 0;
+
+	return drowing_exit_place(game_info);
 }
 
 int get_game_record()
